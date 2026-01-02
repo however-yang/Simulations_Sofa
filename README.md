@@ -7,6 +7,7 @@
 - 可形变肝脏（四面体 FEM），从 `liver3-HD.msh` 加载
 - 鼠标牵拉与固定点
 - 启用切割时，小棍会移除碰到的四面体
+- 表面纹理贴图（使用 `liver2.png`，平面投影生成 UV）
 
 ## 环境要求
 
@@ -40,8 +41,18 @@ runSofa -g qglviewer -l SofaPython3 liver_traction.py
 
 提示：使用键盘前先点击 3D 视窗确保焦点在场景中。
 
+## 纹理说明
+
+当前纹理是用平面投影生成 UV，再直接贴到表面上：
+
+- 投影轴默认是 XZ（`axis_u=0, axis_v=2`）
+- 如需改成 XY 或 YZ，在 `liver_traction.py` 里修改 `SurfaceUVProjector` 的参数即可
+  - XY：`axis_u=0, axis_v=1`
+  - YZ：`axis_u=1, axis_v=2`
+
 ## 文件说明
 
 - `liver_traction.py`：主场景文件
 - `liver3-HD.msh`：肝脏四面体网格（物理）
-- `liver3-HD.obj`：可选表面网格（当前场景未使用）
+- `liver2.png`：肝脏表面纹理
+- `liver3-HD.obj` / `liver3-HD.mtl`：备用表面网格与材质（当前场景未使用）

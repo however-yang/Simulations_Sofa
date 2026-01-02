@@ -320,6 +320,59 @@ class RodCutController(Sofa.Core.Controller):
                 self.topo_proc.tetrahedraToRemove = []
 
 
+class SurfaceUVProjector(Sofa.Core.Controller):
+    def __init__(self, source_dofs, target_visual, axis_u=0, axis_v=2):
+        super().__init__()
+        self.listening = True
+        self.source_dofs = source_dofs
+        self.target_visual = target_visual
+        self.axis_u = axis_u
+        self.axis_v = axis_v
+        self._last_size = None
+
+    def onAnimateBeginEvent(self, _event):
+        positions = self._get_positions(self.source_dofs)
+        if positions is None:
+            return
+        try:
+            count = len(positions)
+        except Exception:
+            return
+        if count == 0:
+            return
+        if self._last_size == count:
+            return
+        self._last_size = count
+        self._apply_uvs(positions)
+
+    def _get_positions(self, mo):
+        pos = getattr(mo, "position", None)
+        if pos is None:
+            return []
+        return getattr(pos, "value", pos)
+
+    def _apply_uvs(self, positions):
+        mins = [min(p[i] for p in positions) for i in range(3)]
+        maxs = [max(p[i] for p in positions) for i in range(3)]
+        du = maxs[self.axis_u] - mins[self.axis_u]
+        dv = maxs[self.axis_v] - mins[self.axis_v]
+        if du == 0.0:
+            du = 1.0
+        if dv == 0.0:
+            dv = 1.0
+        texcoords = [
+            [(p[self.axis_u] - mins[self.axis_u]) / du, (p[self.axis_v] - mins[self.axis_v]) / dv]
+            for p in positions
+        ]
+        data = getattr(self.target_visual, "texcoords", None)
+        if data is None:
+            return
+        if hasattr(data, "value"):
+            data.value = texcoords
+        else:
+            self.target_visual.texcoords = texcoords
+
+
 def createScene(root):
     root.addObject("RequiredPlugin", name="SofaPython3")
     plugins = [
@@ -353,7 +406,7 @@ def createScene(root):
 
     root.addObject(
         "VisualStyle",
-        displayFlags="showVisualModels showBehaviorModels showCollisionModels",
+        displayFlags="showVisual hideBehavior hideCollision hideCollisionModels hideMapping hideForceFields",
     )
     root.gravity = [0, -9.81, 0]
     root.dt = 0.02
@@ -434,6 +487,7 @@ def createScene(root):
     # Liver volume
     scene_dir = os.path.dirname(os.path.abspath(__file__))
     msh_path = os.path.join(scene_dir, "liver3-HD.msh")
+    tex_path = os.path.join(scene_dir, "liver2.png")
     liver = root.addChild("Liver")
     liver.addObject("EulerImplicitSolver", rayleighStiffness=0.1, rayleighMass=0.1)
     liver.addObject("CGLinearSolver", iterations=25, tolerance=1e-9, threshold=1e-9)
@@ -478,14 +532,21 @@ def createScene(root):
         output="@surfTopo",
         listening=True,
     )
-    surface.addObject("MechanicalObject", name="surfDofs", position="@../dofs.position")
+    surf_dofs = surface.addObject("MechanicalObject", name="surfDofs", position="@../dofs.position")
     surface.addObject("IdentityMapping", input="@../dofs", output="@surfDofs")
     surface.addObject("TriangleCollisionModel", moving=True, simulated=True)
     surface.addObject("LineCollisionModel", moving=True, simulated=True)
     surface.addObject("PointCollisionModel", moving=True, simulated=True)
 
     visu = surface.addChild("Visu")
-    visu.addObject("OglModel", name="Visual", color=[0.9, 0.5, 0.3, 1.0])
+    visual = visu.addObject(
+        "OglModel",
+        name="Visual",
+        triangles="@../surfTopo.triangles",
+        texturename=tex_path,
+        color=[1.0, 1.0, 1.0, 1.0],
+        handleDynamicTopology=True,
+    )
     visu.addObject("IdentityMapping", input="@../surfDofs", output="@Visual")
 
     root.addObject(
@@ -502,5 +563,6 @@ def createScene(root):
             rigid=rod_is_rigid,
         )
     )
+    root.addObject(SurfaceUVProjector(surf_dofs, visual, axis_u=0, axis_v=2))
 
     return root
